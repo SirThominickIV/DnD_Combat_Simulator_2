@@ -1,0 +1,2 @@
+pip install pip install console-menu
+pip install jsonpickle

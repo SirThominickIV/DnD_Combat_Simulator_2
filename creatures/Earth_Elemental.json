@@ -1,0 +1,98 @@
+{
+    "py/object": "Creature.Creature",
+    "name": "Earth Elemental",
+    "race": "",
+    "PCclass": null,
+    "challengeRating": 5,
+    "stats": {
+        "str": 5,
+        "dex": -1,
+        "con": 5,
+        "int": -3,
+        "wis": 0,
+        "cha": -3
+    },
+    "savingThrows": {
+        "str": 5,
+        "dex": -1,
+        "con": 5,
+        "int": -3,
+        "wis": 0,
+        "cha": -3
+    },
+    "armorClass": 17,
+    "initiative": -1,
+    "speed": 30,
+    "maxHitPoints": 126,
+    "proficiencies": [],
+    "expertice": [],
+    "classPoints": 0,
+    "SelfDamageMod": {
+        "slashing": 0.5,
+        "bludgeoning": 0.5,
+        "piercing": 0.5,
+        "magical_slashing": 1,
+        "magical_bludgeoning": 1,
+        "magical_piercing": 1,
+        "fire": 1,
+        "cold": 1,
+        "necrotic": 1,
+        "radiant": 1,
+        "lightning": 1,
+        "psychic": 1,
+        "thunder": 2,
+        "force": 1,
+        "poison:": 0,
+        "acid": 1
+    },
+    "ConditionImmunities": {
+        "blinded": 1,
+        "charmed": 1,
+        "deafened": 1,
+        "frightened": 1,
+        "grappled": 1,
+        "incapacitated": 1,
+        "invisible": 1,
+        "paralyzed": 0,
+        "petrified": 0,
+        "poisoned": 0,
+        "prone": 1,
+        "restrained": 1,
+        "stunned:": 1,
+        "unconscious": 0,
+        "exhaustion": 0
+    },
+    "attacks": [
+        {
+            "py/object": "Attacks.Attack",
+            "name": "slam",
+            "basedOnStat": "str",
+            "bonusDamage": 0,
+            "proficiency": 3,
+            "critRange": 20,
+            "savingThrow": null,
+            "damage": [
+                {
+                    "py/object": "Damage.Damage",
+                    "dieSize": 8,
+                    "numberOfDie": 2,
+                    "basedOnStat": "str",
+                    "bonus": 0,
+                    "type": "bludgeoning"
+                }
+            ]
+        }
+    ],
+    "initiativeRoll": 0,
+    "team": 0,
+    "hitPoints": 126,
+    "tempHitPoints": 0,
+    "conditions": [],
+    "advantage": {
+        "default": 0
+    },
+    "multiAttack": [
+        "slam",
+        "slam"
+    ]
+}
