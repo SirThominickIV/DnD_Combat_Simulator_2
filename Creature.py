@@ -211,12 +211,12 @@ class Creature():
         
 
         # Check to see if the creature has attacks
-        if len(self.attacks) < 1:
+        if not self.attacks:
             print(f"!!! WARNING !!! - {self.name} has no attacks, yet attack() was called.")
             return
 
         # Multi attack
-        if len(self.multiAttack) > 0:               # If there is a multi attack
+        if self.multiAttack:               # If there is a multi attack
             for attackName in self.multiAttack:     # Get all the attack names
                 for attack in self.attacks:         # Search each attack
                     if attack.name == attackName:   # If the attack names match, use that attack
