@@ -312,6 +312,8 @@ def menu_addCreatures():
     
     # Setup
     global fileList, teamList
+    resetCreatures()
+    formatTeams()
     print("\n")
 
     # Show the list of available monsters
@@ -432,11 +434,24 @@ def menu_displayTeams():
 
 
 
-def menu_addPreset():
+def menu_addPreset_basic():
 
     freshCreatures.append(createFreshCreature("creatures/Dire_Bear.json", 0))
     freshCreatures.append(createFreshCreature("creatures/Earth_Elemental.json", 1))
     freshCreatures.append(createFreshCreature("creatures/Hill_Giant.json", 2))
+    
+    resetCreatures()
+
+def menu_addPreset_basic_x10():
+
+    c1 = createFreshCreature("creatures/Dire_Bear.json", 0)
+    c2 = createFreshCreature("creatures/Earth_Elemental.json", 1)
+    c3 = createFreshCreature("creatures/Hill_Giant.json", 2)
+
+    for i in range(0, 10):
+        freshCreatures.append(copy.copy(c1))
+        freshCreatures.append(copy.copy(c2))
+        freshCreatures.append(copy.copy(c3))
     
     resetCreatures()
 
@@ -453,7 +468,21 @@ def menu_addPreset_Random():
     
     resetCreatures()
 
+def menu_addPreset_KingOfTheHill():
 
+    for i, path in enumerate(fileList):
+        freshCreatures.append(createFreshCreature(path, i))
+    
+    resetCreatures()
+
+def menu_addPreset_Commoner():
+
+    c = createFreshCreature("creatures/Commoner.json", 0)
+
+    for i in range(0, 10000):
+        freshCreatures.append(copy.copy(c))
+    
+    resetCreatures()
 
 ###########################################################################################################################################
 ################################################################ Main GUI #################################################################
@@ -479,10 +508,10 @@ def gui():
 
     # Add functions to preset menu
     preset1 = FunctionItem("Completely Random", menu_addPreset_Random)
-    preset2 = FunctionItem("King of the Hill - All creatures in /creatures/ - Free for all", menu_addPreset)
-    preset3 = FunctionItem("1,000,000 peasant", menu_addPreset)
-    preset4 = FunctionItem("Dire Bear, Earth Golem, Hill Giant x1 Each", menu_addPreset)
-    preset5 = FunctionItem("Dire Bear, Earth Golem, Hill Giant x10 Each", menu_addPreset)
+    preset2 = FunctionItem("King of the Hill - All creatures in /creatures/ - Free for all", menu_addPreset_KingOfTheHill)
+    preset3 = FunctionItem("10,000 peasant", menu_addPreset_Commoner)
+    preset4 = FunctionItem("Dire Bear, Earth Golem, Hill Giant x1 Each", menu_addPreset_basic)
+    preset5 = FunctionItem("Dire Bear, Earth Golem, Hill Giant x10 Each", menu_addPreset_basic_x10)
 
     # Adding presets to preset menu
     presets.append_item(preset1)
