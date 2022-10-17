@@ -36,6 +36,10 @@ creatureDisplayDict = [{"name": "", "diedOnRound": 0, "team": "team", "quantity"
 winningTeam = -1
 simulationActive = False
 
+# Misc
+clearConsole = lambda: os.system('cls' if os.name in ('nt', 'dos') else 'clear')
+clearConsole()
+
 
 ###########################################################################################################################################
 ######################################################### Main Program Functions ##########################################################
@@ -185,6 +189,7 @@ def battle():
     global winningTeam, simulationActive
     simulationActive = True
 
+    clearConsole()
     resetCreatures()  
 
     # Check to make sure there is at least 2 creatures
@@ -201,7 +206,7 @@ def battle():
     # FIGHT FIGHT FIGHT!    
     winningTeam = -1
     for i in range(1, 10000): #Failsafe for if loop never breaks. Hopefully no battle goes on for more than 10000 turns (16 hours in game!)
-
+        
         # Check for a winning team
         if winningTeam >= 0:
             break
@@ -210,26 +215,30 @@ def battle():
         for creature in initiativeList:
 
             # Give the turn
-            effectedCreature = creature.turn(teamList)  #Creature.turn returns the creature that was effected during the turn
+            print("\n")
+            effectedCreatures = creature.turn(teamList)  #Creature.turn returns the creatures that was effected during the turn
 
-            # Check for a death
-            if effectedCreature.hitPoints > 0:
-                continue
+            for effectedCreature in effectedCreatures:
+                # Check for a death
+                if effectedCreature.hitPoints > 0:
+                    continue
 
-            # The effected creature died, mark it as dead
-            removeCreature(effectedCreature)
-            effectedCreature.diedOnRound = i
-            print(f"\n{effectedCreature.name} died!\n")
-                
-            # Check to see if the game is finished (1 team remaining)
-            if len(teamList) == 1:
-                winningTeam = creature.team
-                break
+                # The effected creature died, mark it as dead
+                removeCreature(effectedCreature)
+                effectedCreature.diedOnRound = i
+                print(f"\t{effectedCreature.name} died!")
+                    
+                # Check to see if the game is finished (1 team remaining)
+                if len(teamList) == 1:
+                    winningTeam = creature.team
+                    break
 
 
     # Sort/format the aftermath for display
+    print("\n")
     formatTeams()
     displayTeams()
+    clearConsole()
     simulationActive = False
 
 
@@ -239,6 +248,7 @@ def battle():
 ###########################################################################################################################################
 ############################################################# Menu Functions ##############################################################
 ###########################################################################################################################################
+
 
 
 def displayTeam(team):
@@ -417,7 +427,7 @@ def menu_clearAll():
 
 
 def menu_runBattle():
-
+    
     battle()
 
     print("\n")
@@ -442,6 +452,8 @@ def menu_addPreset_basic():
     
     resetCreatures()
 
+
+
 def menu_addPreset_basic_x10():
 
     c1 = createFreshCreature("creatures/Dire_Bear.json", 0)
@@ -454,6 +466,8 @@ def menu_addPreset_basic_x10():
         freshCreatures.append(copy.copy(c3))
     
     resetCreatures()
+
+
 
 def menu_addPreset_Random():
 
@@ -468,12 +482,16 @@ def menu_addPreset_Random():
     
     resetCreatures()
 
+
+
 def menu_addPreset_KingOfTheHill():
 
     for i, path in enumerate(fileList):
         freshCreatures.append(createFreshCreature(path, i))
     
     resetCreatures()
+
+
 
 def menu_addPreset_Commoner():
 
@@ -483,6 +501,8 @@ def menu_addPreset_Commoner():
         freshCreatures.append(copy.copy(c))
     
     resetCreatures()
+
+
 
 ###########################################################################################################################################
 ################################################################ Main GUI #################################################################
@@ -504,9 +524,11 @@ def gui():
 
     # Create the menus
     main_menu = ConsoleMenu("Dungeons and Dragons Combat Simulator", "Version 2!", formatter=menu_format, clear_screen=False)
-    presets = ConsoleMenu("Presets", "Interesting battles to simulate", formatter=menu_format, clear_screen=False)
+    presets = ConsoleMenu("Presets", "Interesting battles to simulate", formatter=menu_format, clear_screen=True)
 
     # Add functions to preset menu
+
+
     preset1 = FunctionItem("Completely Random", menu_addPreset_Random)
     preset2 = FunctionItem("King of the Hill - All creatures in /creatures/ - Free for all", menu_addPreset_KingOfTheHill)
     preset3 = FunctionItem("10,000 peasant", menu_addPreset_Commoner)
@@ -536,5 +558,6 @@ def gui():
 
     main_menu.show()
 
-gui()
+if __name__ == "__main__":
+    gui()
 

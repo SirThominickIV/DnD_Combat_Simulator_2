@@ -15,6 +15,7 @@ class Creature():
         self.team = team                        # The static ID of the team
         self.teamIndex = team                   # The not so static ID of the team (For when teams get removed)
         self.diedOnRound = 0
+        self.target = None                      # The creature being targeted by this creature
 
         # Actual DnD variables
         self.initiativeRoll = random.randint(1, 20) + self.initiative
@@ -168,9 +169,21 @@ class Creature():
 
 
 
-    def attack(self, creature):
+    def attack(self):
+
+        # Check to see if the creature has attacks
+        if not self.attacks:
+            print(f"!!! WARNING !!! - {self.name} has no attacks, yet attack() was called.")
+            return
+
+        creature = self.getTarget()
+        effectedCreatures = []
 
         def singleAttack(attack):
+            
+            # Check that a valid target was found
+            if creature == 0:
+                return
 
             # Roll to hit the other creature
             roll = random.randint(1, 20) 
@@ -207,51 +220,79 @@ class Creature():
                 # Apply damage
                 print(f"\t{creature.name} took {d} {damage.type} damage.")
                 creature.hitPoints -= d
+                effectedCreatures.append(creature)
 
-        
-
-        # Check to see if the creature has attacks
-        if not self.attacks:
-            print(f"!!! WARNING !!! - {self.name} has no attacks, yet attack() was called.")
-            return
 
         # Multi attack
-        if self.multiAttack:               # If there is a multi attack
+        if self.multiAttack:                        # If there is a multi attack
             for attackName in self.multiAttack:     # Get all the attack names
                 for attack in self.attacks:         # Search each attack
                     if attack.name == attackName:   # If the attack names match, use that attack
                         singleAttack(attack)
+                        creature = self.getTarget()
                         break
                         
-            print("\n")
         
         # If there is no multi attack, just use the first attack TODO: Have creatures decide which one is best
         else:
             singleAttack(self.attacks[0])
 
+        return [*set(effectedCreatures)]
+
             
+
+    def getTarget(self):
+
+        # Go for the creature that was attacked last round if it is still alive
+        if self.target is not None and self.target.hitPoints > 0:
+            return self.target
+
+        while True:
+
+            # Find a team to target
+            allowedValuesTeam = list(range(0, len(self.teamList)))
+            allowedValuesTeam.remove(self.teamIndex)    
+
+            while True:       
+
+                # Check that other teams are alive
+                if not len(allowedValuesTeam):
+                    return 0     
+
+                # Find a creature within a team to target
+                targetedTeamIndex = random.choice(allowedValuesTeam)
+                allowedValuesCreature = list(range(0, (len(self.teamList[targetedTeamIndex]))))
+
+                while True:
+
+                    # Check that there are creatures left on the team
+                    if not len(allowedValuesCreature): 
+                        allowedValuesTeam.remove(targetedTeamIndex)
+                        break 
+
+                    # Choose a creature
+                    targetedCreatureIndex = random.choice(allowedValuesCreature)
+                    targetedCreature = self.teamList[targetedTeamIndex][targetedCreatureIndex]
+
+                    # Check that it is a valid target
+                    if targetedCreature.hitPoints <= 0:
+                        allowedValuesCreature.remove(targetedCreatureIndex)
+                        continue
+
+                    # Target is valid
+                    self.target = targetedCreature
+                    return targetedCreature
+
+
 
     # This is the main function within creature. Call this to give a creature a turn. From there the
     # creature will do it's own thing.
-    def turn(self, teamList):
+    def turn(self, teamList):     
 
-        # Find a team to target
-        allowed_values = list(range(0, len(teamList)))
-        allowed_values.remove(self.teamIndex)
-        targetedTeam = random.choice(allowed_values)
-
-        # Find a creature to target
-        targetedCreature = random.randint(0, (len(teamList[targetedTeam]))-1)
-        targetedCreature = teamList[targetedTeam][targetedCreature]
-
-        # Debug warning - Check to make sure the targeted creature is alive and not on the same team
-        if targetedCreature.team == self.team or targetedCreature.hitPoints <= 0:
-            print(f"!!! WARNING !!! - {self.name} tried to attack {targetedCreature.name}. This shouldn't happen!")
-            return
+        # Update the team list:
+        self.teamList = teamList   
 
         # Attack that creature
-        self.attack(targetedCreature)
-
-        return targetedCreature
+        return self.attack()
 
 

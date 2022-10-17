@@ -1,0 +1,10 @@
+------------------------------------------------------------
+10/17/22 - Updated getTarget() for better use of multiattack
+------------------------------------------------------------
+Previously, getTarget() was only called once per turn per creature. So if a creature had multiattack it would continually attack the same dead target. Now it checks that the creature being attacked is a valid target (has health), and chooses a different one if needed. In effect:
+
+Before:
+    Creature 1 has 3 attacks per turn, and uses all 3 on creature 2, killing creature 2 on attack 1.
+
+After:
+    Creature 1 has 3 attacks per turn, and uses the first attack to instantly kill creature 2. The remaining 2 attacks go to creatyre 3.
