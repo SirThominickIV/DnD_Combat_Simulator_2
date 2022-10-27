@@ -1,3 +1,4 @@
+import time
 import os
 import operator
 import copy
@@ -9,6 +10,7 @@ from consolemenu.format import *
 from consolemenu.menu_component import Dimension 
 
 import Creature
+import OutputManager
 
 # Get all of the creature paths out of the creature directory
 fileList = []
@@ -32,13 +34,16 @@ losers = []                 # Any creature that has died goes here
 # Display dictionary
 creatureDisplayDict = [{"name": "", "diedOnRound": 0, "team": "team", "quantity": 0, "objects": []}]
 
-# Tracking
+# General Tracking
 winningTeam = -1
+teamWinCount = []
 simulationActive = False
 
 # Misc
 clearConsole = lambda: os.system('cls' if os.name in ('nt', 'dos') else 'clear')
 clearConsole()
+outputManager = OutputManager.OutputManager()
+
 
 
 ###########################################################################################################################################
@@ -49,12 +54,15 @@ clearConsole()
 
 def createFreshCreature(path, team):
 
+    global outputManager
+
     try:
         
         # Create the creature
         newCreature = Creature.Creature().loadFromFile(path)
         newCreature.team = team
         newCreature.teamIndex = team
+        newCreature.outputManager = outputManager
 
         return(newCreature)
 
@@ -89,8 +97,8 @@ def resetCreatures():
 
 
 def formatTeams():
-    # Make a list of the teams
-    global teamList, initiativeList, losers, creatureDisplayDict, simulationActive
+
+    global teamList, initiativeList, losers, creatureDisplayDict, simulationActive, teamWinCount
     teamList = [[]]
 
     # Put all creatures into one list
@@ -149,6 +157,11 @@ def formatTeams():
     if not teamList:
         teamList = [[]]
 
+    # Reset win counts
+    for dict in creatureDisplayDict:
+        while len(teamWinCount) < dict["team"] + 1:
+            teamWinCount.append(0)
+
 
 
 
@@ -186,10 +199,9 @@ def removeCreature(creature):
 
 def battle():
 
-    global winningTeam, simulationActive
+    global winningTeam, simulationActive, outputManager, teamWinCount
     simulationActive = True
 
-    clearConsole()
     resetCreatures()  
 
     # Check to make sure there is at least 2 creatures
@@ -211,12 +223,28 @@ def battle():
         if winningTeam >= 0:
             break
 
+        # Output for better viewing of logs
+        outputManager.addLine(f"====================================================================================================", 0)
+        outputManager.addLine(f"============================================= Round {i} ==============================================", 0)
+        outputManager.addLine(f"====================================================================================================", 0)
+
         # Go down the initiative list, giving each creature a turn
         for creature in initiativeList:
 
+            # Check for a winning team
+            if winningTeam >= 0:
+                break
+
             # Give the turn
-            print("\n")
+            outputManager.addLine("\n", 0)
+            effectedCreatures = None
             effectedCreatures = creature.turn(teamList)  #Creature.turn returns the creatures that was effected during the turn
+
+            # Quick check against garbage
+            if effectedCreatures == None:
+                outputManager.addLine(f"!!! WARNING !!! - No creatures were targeted on this turn.", 2)
+                return
+
 
             for effectedCreature in effectedCreatures:
                 # Check for a death
@@ -226,20 +254,31 @@ def battle():
                 # The effected creature died, mark it as dead
                 removeCreature(effectedCreature)
                 effectedCreature.diedOnRound = i
-                print(f"\t{effectedCreature.name} died!")
+                outputManager.addLine(f"\t{effectedCreature.name} died!", 0)
                     
                 # Check to see if the game is finished (1 team remaining)
                 if len(teamList) == 1:
                     winningTeam = creature.team
                     break
 
+        outputManager.addLine("\n", 0)
 
-    # Sort/format the aftermath for display
-    print("\n")
+    # Add to the count of how many times that team X has won
+    # Expand list size if needed
+    for dict in creatureDisplayDict:
+        while len(teamWinCount) < winningTeam + 1:
+            teamWinCount.append(0)
+    teamWinCount[winningTeam] += 1
+
+
+
+    outputManager.addLine(f"====================================================================================================", 0)
+    outputManager.addLine("\n", 0)
+
     formatTeams()
-    displayTeams()
-    clearConsole()
-    simulationActive = False
+    displayTeams(0)
+    
+
 
 
 
@@ -251,14 +290,15 @@ def battle():
 
 
 
-def displayTeam(team):
+def displayTeam(teamindex, mode):
 
-    global creatureDisplayDict, winningTeam
+    global creatureDisplayDict, winningTeam, teamList
 
     # Check if it is an empty team, if so, say so
-    if not teamList[team]:
-        print("\tEmpty")
-        return
+    for i, team in enumerate(teamList):
+        if not len(team) and i == teamindex:
+            outputManager.addLine("\t\tEmpty", mode)
+            return
 
     # Find the maximum quantity to display (important for displaying 1,000 wolves vs acerak at 129 hp)
     maxQuantity = 0
@@ -269,40 +309,51 @@ def displayTeam(team):
     # Sort the display list
     creatureDisplayDict = sorted(creatureDisplayDict, key=operator.itemgetter('diedOnRound','quantity', 'team'))
 
-    if winningTeam >= 0:
+    # Display winning team
+    if winningTeam >= 0 and teamindex == winningTeam:
 
         # Display Dead Creatures
         for dict in creatureDisplayDict:
-            if dict["team"] == team:
-                if dict["diedOnRound"] > 0:
-                    print(f"\t{dict['name']} x{dict['quantity']} - Died on round {dict['diedOnRound']}")
+            if dict["team"] == teamindex and dict["diedOnRound"] > 0:
+                outputManager.addLine(f"\t\t{dict['name']} x{dict['quantity']} - Died on round {dict['diedOnRound']}", mode)
 
         # Display Alive Creatures
         for dict in creatureDisplayDict:
-            if dict["team"] == team:
-                if dict["diedOnRound"] == 0:
-                    dict['objects'].sort(key=operator.attrgetter("hitPoints"))
+            if dict["team"] == teamindex and dict["diedOnRound"] == 0:
+                dict['objects'].sort(key=operator.attrgetter("hitPoints"))
+
+                if dict['quantity'] > 10:
+                    # Display by quantity
+                    outputManager.addLine(f"\t\t{dict['name']} x{dict['quantity']} - Survived!", mode)
+                else:
+                    # Display by individual HP
                     for creature in dict['objects']:
-                        print(f"\t{creature.name} - {creature.hitPoints} HP")
-    
-    else:
-        # Display Dead Creatures
+                        outputManager.addLine(f"\t\t{creature.name} - {creature.hitPoints} HP", mode)
+                    
+    # Displaying all creature for when a battle hasn't happened yet
+    elif winningTeam == -1:
         for dict in creatureDisplayDict:
-            if dict["team"] == team:
-                print(f"\t{dict['name']} x{dict['quantity']}")
+            if dict["team"] == teamindex:
+                outputManager.addLine(f"\t\t{dict['name']} x{dict['quantity']}", mode)
+    
+    # Display Dead Creatures - Catch all case
+    else:        
+        for dict in creatureDisplayDict:
+            if dict["team"] == teamindex:
+                outputManager.addLine(f"\t\t{dict['name']} x{dict['quantity']} - Died on round {dict['diedOnRound']}", mode)
 
 
 
-def displayTeams():
+def displayTeams(mode):
 
-    global teamList, creatureDisplayDict, winningTeam
+    global teamList, creatureDisplayDict, winningTeam, outputManager
     header = "Team"
 
     # Print the winning team if there is one, and set a header for the rest of the output
     if winningTeam >= 0:
-        print("Winning team: ")
-        displayTeam(winningTeam)
-        print("Losers: ")
+        outputManager.addLine("Winning team:", mode)
+        displayTeam(winningTeam, mode)
+        outputManager.addLine("Losers: ", mode)
         header = "    Team"
 
     # Display teams/loser teams
@@ -312,9 +363,9 @@ def displayTeams():
         if t == winningTeam:
             continue
 
-        print(f"{header} {t+1}:")
+        outputManager.addLine(f"{header} {t+1}:", mode)
 
-        displayTeam(t)
+        displayTeam(t, mode)
 
 
 
@@ -355,8 +406,6 @@ def menu_addCreatures():
     if i == 0:
         return
 
-
-
     # Expand the team list if all teams have at least 1 creature
     teamWithEmpty = False
     for team in teamList:
@@ -385,7 +434,7 @@ def menu_addCreatures():
         return
 
     # Show the user what they're doing
-    displayTeams()
+    displayTeams(-1)
 
     # Get team input
     while i != 0:
@@ -428,19 +477,95 @@ def menu_clearAll():
 
 def menu_runBattle():
     
-    battle()
+    global simulationActive, outputManager, initiativeList, teamList, teamWinCount
+
+    # Display teams in the overview log
+    teamWinCount = []
+    formatTeams()
+    resetCreatures()
+    outputManager.verbose = False
+    displayTeams(1)
+    outputManager.verbose = True
+
+    # Find out how many battles to run
+    battlesToRun = -1
+    while battlesToRun < 0:
+
+        print("How many battles should be run?")
+
+        try:
+            battlesToRun = int(input("> "))
+            outputManager.numBattles = battlesToRun
+
+            # Warn user of excesive simulation time & turn off verbose
+            if battlesToRun > 100:
+                print("\n")
+                input(f"Warning! {battlesToRun} is a lot of battles! You might want to reconsider.\nPress Enter to Continue...")
+                outputManager.verbose = False
+
+            if len(initiativeList) > 100:
+                print("\n")
+                input(f"Warning! {len(initiativeList)} is a lot of creatures! You might want to reconsider.\nPress Enter to Continue...")
+                outputManager.verbose = False
+
+        except:
+            print("Invalid input. Enter 0 to exit without starting a battle.")
+
+
+    # Win index logging
+    outputManager.winIndexesByTeam = [[]]
+    while len(outputManager.winIndexesByTeam) != len(teamList):
+        outputManager.winIndexesByTeam.append([])
+        
+
+    # Battle for requested ammount
+    simulationActive = True
+    outputManager.startTime = time.time()
+
+    if not outputManager.verbose:
+        print("Running...")
+
+    for i in range(0, battlesToRun):
+
+        print(f"Running Battle {i}")
+        outputManager.currentBattle = i
+        battle()
+        outputManager.winIndexesByTeam[winningTeam].append(i)
+        
+    outputManager.endTime = time.time()
+
+    # Sort/format the aftermath for display    
+    print("")
+    formatTeams() 
+    outputManager.verbose = False
+    simulationActive = False
+
+    # Send the win counts to the output manager
+    outputManager.addLine("", 1)
+    for i, winCount in enumerate(teamWinCount):
+        footer = ""
+        if winCount > 0:
+            footer = f" - {((winCount/battlesToRun)*100):.2f} % win rate"
+        outputManager.addLine(f"Team {i+1} - {winCount} wins{footer}", 1)
+    outputManager.addLine("", 1)
+
+    # Save
+    outputManager.verbose = True
+    outputManager.saveBattles()
 
     print("\n")
     input("Press Enter to Continue...")
+    clearConsole()
         
 
 
 def menu_displayTeams():
     print("\n")
     formatTeams()
-    displayTeams()
+    displayTeams(-1)
     print("\n")
     input("Press Enter to Continue...")
+    clearConsole()
 
 
 
@@ -504,6 +629,20 @@ def menu_addPreset_Commoner():
 
 
 
+def menu_toggleSaveToFile():
+    global outputManager
+
+    if outputManager.canSaveToFile:
+        outputManager.canSaveToFile = False
+        print("Saving to file: Disabled")
+    else:
+        outputManager.canSaveToFile = True
+        print("Saving to file: Enabled")
+
+    print("\n")
+    input("Press Enter to Continue...")
+
+
 ###########################################################################################################################################
 ################################################################ Main GUI #################################################################
 ###########################################################################################################################################
@@ -511,6 +650,8 @@ def menu_addPreset_Commoner():
 
 
 def gui():
+
+    global outputManager
 
     # Create the formatting for the menu
     menu_format = MenuFormatBuilder(max_dimension=Dimension(100,50)) \
@@ -523,7 +664,7 @@ def gui():
         .show_header_bottom_border(True)
 
     # Create the menus
-    main_menu = ConsoleMenu("Dungeons and Dragons Combat Simulator", "Version 2!", formatter=menu_format, clear_screen=False)
+    main_menu = ConsoleMenu("Dungeons and Dragons Combat Simulator", "Version 2!", formatter=menu_format, clear_screen=True)
     presets = ConsoleMenu("Presets", "Interesting battles to simulate", formatter=menu_format, clear_screen=True)
 
     # Add functions to preset menu
@@ -548,6 +689,7 @@ def gui():
     mainItem3 = FunctionItem("Reset Creature List", menu_clearAll)
     mainItem4 = FunctionItem("View Creature List", menu_displayTeams)
     mainItem5 = FunctionItem("Run Battles", menu_runBattle)
+    mainItem6 = FunctionItem(f"Toggle Saving to File", menu_toggleSaveToFile)
 
     # Add the items to the main menu
     main_menu.append_item(mainItem1)
@@ -555,6 +697,7 @@ def gui():
     main_menu.append_item(mainItem3)
     main_menu.append_item(mainItem4)
     main_menu.append_item(mainItem5)
+    main_menu.append_item(mainItem6)
 
     main_menu.show()
 

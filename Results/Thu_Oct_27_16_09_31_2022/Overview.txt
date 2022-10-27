@@ -1,0 +1,18 @@
+Team 1:
+		Commoner x20
+Team 2:
+		Earth Elemental x1
+
+Team 1 - 0 wins
+Team 2 - 1000 wins - 100.00 % win rate
+
+
+Wins by battle number:
+Team 1:
+	No wins
+Team 2:
+	0-999
+
+Time Started: Thu Oct 27 16:09:29 2022
+Time Finished: Thu Oct 27 16:09:31 2022
+Elapsed Time: 00:00:01

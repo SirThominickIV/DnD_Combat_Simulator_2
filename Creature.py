@@ -112,6 +112,7 @@ class Creature():
         # Things to use in battle
         self.attacks = [Attacks.Attack()]
         self.multiAttack = []
+        self.outputManager = None
 
         self.resetTempVars()
 
@@ -128,14 +129,22 @@ class Creature():
 
         # Load the pickle string from the file
         with open(path) as f:
-            pickleString = f.read()
+            pickleString = f.read()        
 
         # Load all the attributes into this object
-        creature = jsonpickle.decode(pickleString)
+        loadedCreature = jsonpickle.decode(pickleString)
+
+        # Replace the variables of this creature with those from the loaded creature
+        for loadedAttr, loadedValue in loadedCreature.__dict__.items():
+            for selfAttr, selfValue in self.__dict__.items():
+                if selfAttr == loadedAttr:
+                    self.__dict__[loadedAttr] = loadedValue            
 
         print(f"Creature loaded from {path}")
-        creature.resetTempVars()
-        return creature
+        self.resetTempVars()
+        return self
+
+
 
     def saveToFile(self, path = ""):
 
@@ -154,7 +163,7 @@ class Creature():
         with open(path, "w") as outfile:
             outfile.write(pickleString)
 
-        print(f"Creature saved as {path}")
+        self.outputManager.addLine(f"Creature saved as {path}", -1)
 
 
     def action(self):
@@ -173,7 +182,7 @@ class Creature():
 
         # Check to see if the creature has attacks
         if not self.attacks:
-            print(f"!!! WARNING !!! - {self.name} has no attacks, yet attack() was called.")
+            self.outputManager.addLine(f"!!! WARNING !!! - {self.name} has no attacks, yet attack() was called.", 2)
             return
 
         creature = self.getTarget()
@@ -194,9 +203,9 @@ class Creature():
             crit = False
             if roll >= attack.critRange:
                 crit = True
-                print(f"{self.name} used {attack.name} and rolled a critical on {creature.name}.")
+                self.outputManager.addLine(f"{self.name} used {attack.name} and rolled a critical on {creature.name}.", 0)
             else:
-                print(f"{self.name} used {attack.name} and rolled a {totalRoll} to hit {creature.name}.")        
+                self.outputManager.addLine(f"{self.name} used {attack.name} and rolled a {totalRoll} to hit {creature.name}.", 0)        
 
             # Check to see if it was a miss
             if totalRoll < creature.armorClass and not crit:
@@ -218,7 +227,7 @@ class Creature():
                     d += int(damage.roll() * creature.SelfDamageMod[damage.type])
 
                 # Apply damage
-                print(f"\t{creature.name} took {d} {damage.type} damage.")
+                self.outputManager.addLine(f"\t{creature.name} took {d} {damage.type} damage.", 0)
                 creature.hitPoints -= d
                 effectedCreatures.append(creature)
 
@@ -287,7 +296,11 @@ class Creature():
 
     # This is the main function within creature. Call this to give a creature a turn. From there the
     # creature will do it's own thing.
-    def turn(self, teamList):     
+    def turn(self, teamList):
+
+        if not self.outputManager:
+            print(f"!!! WARNING !!! - {self.name} was not given the output manager, which is required for output. This turn was skipped!")
+            return
 
         # Update the team list:
         self.teamList = teamList   

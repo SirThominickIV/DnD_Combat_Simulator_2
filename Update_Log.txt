@@ -1,4 +1,20 @@
 ------------------------------------------------------------
+10/17/22 - Created a new module to handle output
+------------------------------------------------------------
+There is now an output manager! It takes output that is given to it, and saves them to logs within the results folder that it creates. There are two main categories of logs. There are individual battle logs, and an overview log. So if you run 100,000 battles, each battle will get it's own log to show what each creature did on it's turn. The overview log will tell you broad statistics about the battles that were run. How many times did the nth team win? What was the percentage? What creatures were on each time? Which rounds did the nth team win? These are all answered and logged in the overview log.
+
+Additionally, some display formatting has been updated. Now if there is a large number of surviving creatures after a battle (such as with the case of 10,000 commoners) it will now display something like:
+
+    Commoner x27 - Died on round 1
+    Commoner x22 - Died on round 2
+    Commoner x14 - Died on round 3
+    Commoner x3 - Died on round 4
+    Commoner x34 - Survived!
+
+Though, this feature will not be triggered unless you have more than 5 of the same creature. So if you have a BBEG, and a bunch of commoners, both will be displayed in a meaningful way.  
+
+
+------------------------------------------------------------
 10/17/22 - Updated getTarget() for better use of multiattack
 ------------------------------------------------------------
 Previously, getTarget() was only called once per turn per creature. So if a creature had multiattack it would continually attack the same dead target. Now it checks that the creature being attacked is a valid target (has health), and chooses a different one if needed. In effect:
@@ -7,4 +23,4 @@ Before:
     Creature 1 has 3 attacks per turn, and uses all 3 on creature 2, killing creature 2 on attack 1.
 
 After:
-    Creature 1 has 3 attacks per turn, and uses the first attack to instantly kill creature 2. The remaining 2 attacks go to creatyre 3.
+    Creature 1 has 3 attacks per turn, and uses the first attack to instantly kill creature 2. The remaining 2 attacks go to creature  3.
