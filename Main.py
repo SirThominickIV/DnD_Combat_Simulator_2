@@ -12,274 +12,279 @@ from consolemenu.menu_component import Dimension
 import Creature
 import OutputManager
 
-# Get all of the creature paths out of the creature directory
-fileList = []
-for root, dirs, files in os.walk("creatures/"):
-	for file in files:
-        #append the file name to the list
-		fileList.append(os.path.join(root,file))
-readablePaths = []
-for s in fileList:
-    s = s.replace("creatures/","")
-    s = s.replace(".json","")
-    s = s.replace("_"," ")
-    readablePaths.append(s)
-
-# Creature lists, to more easily find a particular creature
-freshCreatures = []         # A list of every creature to copy from when doing new battles
-initiativeList = []         # This is the turn order, it goes from high to low, then repeats. Only alive creatures are on here.
-teamList = [[]]             # This keeps track of which creature is on which team. Only alive creatures are on here.
-losers = []                 # Any creature that has died goes here
-
-# Display dictionary
-creatureDisplayDict = [{"name": "", "diedOnRound": 0, "team": "team", "quantity": 0, "objects": []}]
-
-# General Tracking
-winningTeam = -1
-teamWinCount = []
-simulationActive = False
-
-# Misc
 clearConsole = lambda: os.system('cls' if os.name in ('nt', 'dos') else 'clear')
 clearConsole()
-outputManager = OutputManager.OutputManager()
-
-
 
 ###########################################################################################################################################
-######################################################### Main Program Functions ##########################################################
+############################################################# Dungeon Master ##############################################################
 ###########################################################################################################################################
 
-
-
-def createFreshCreature(path, team):
-
-    global outputManager
-
-    try:
-        
-        # Create the creature
-        newCreature = Creature.Creature().loadFromFile(path)
-        newCreature.team = team
-        newCreature.teamIndex = team
-        newCreature.outputManager = outputManager
-
-        return(newCreature)
-
-    except:
-        print("!!! WARNING !!! - Something went wrong with adding those creatures. A default creature was created instead.")
-        return Creature.Creature()
-
-
-
-def resetCreatures():
-
-    global teamList, initiativeList, losers, freshCreatures, winningTeam
-
-    # Reset vars
-    initiativeList = []
-    teamList = [[]]
-    losers = []
-    winningTeam = -1
-
-    # Create the new creatures
-    for creature in freshCreatures:
-        newCreature = copy.copy(creature)           # Copy from the clean copy
-        newCreature.resetTempVars(creature.team)    # Set their health and re-roll initiative
-        initiativeList.append(newCreature)          # Add it to the danger zone
-
-    # Sort the initiative
-    initiativeList.sort(key=operator.attrgetter("initiativeRoll"))
-    initiativeList.reverse()   
+class DungeonMaster():
+    """
+    The dungeon master controls each and every battle. It holds on to a lot of important info such as creature lists, winners, losers, etc.
     
-    formatTeams()
+    createFreshCreature(): Creates a creature from a path and puts it on a given team.
+    resetCreatures(): Resets the HP, initiative, and initiative list of each creature.
+    formatTeams(): Sorts the teams based on which ones are alive, which teams they are on, etc.
+    removeCreature(): Used for killing a creature. The creature object still exists, it's just forgotten from the turn order and other similar tracking.
+    battle(): The big function of the DM. Battle will run a battle 
+    """
 
-
-
-def formatTeams():
-
-    global teamList, initiativeList, losers, creatureDisplayDict, simulationActive, teamWinCount
-    teamList = [[]]
-
-    # Put all creatures into one list
-    activeCreatures = []
-    for creature in initiativeList:
-        activeCreatures.append(creature)
-    for creature in losers:
-        activeCreatures.append(creature)
-
-    # For all dead and alive creatures, create a list where they are grouped with their teammates
-    for creature in activeCreatures:
+    def __init__(self) -> None:
         
-        creatureAdded = False
-        while creatureAdded == False:
 
-            try:
-                # Try to add the creature
-                teamList[creature.team].append(creature)    
-                creatureAdded = True
+        # Get all of the creature paths out of the creature directory
+        self.fileList = []
+        for root, dirs, files in os.walk("creatures/"):
+            for file in files:
+                #append the file name to the list
+                self.fileList.append(os.path.join(root,file))
+        self.readablePaths = []
+        for s in self.fileList:
+            s = s.replace("creatures/","")
+            s = s.replace(".json","")
+            s = s.replace("_"," ")
+            self.readablePaths.append(s)
 
-            except:
-                # Creature wasn't added successfully, increase the size of TeamList to fix it
-                teamList.append([])   
+        # Creature lists, to more easily find a particular creature
+        self.freshCreatures = []         # A list of every creature to copy from when doing new battles
+        self.initiativeList = []         # This is the turn order, it goes from high to low, then repeats. Only alive creatures are on here.
+        self.teamList = [[]]             # This keeps track of which creature is on which team. Only alive creatures are on here.
+        self.losers = []                 # Any creature that has died goes here
 
-    # If the last team is empty during a simulation, remove it, but not if there is only 1 team
-    if not teamList[len(teamList)-1] and not teamList and simulationActive:
-        teamList.pop(len(teamList)-1)
+        # Display dictionary
+        self.creatureDisplayDict = [{"name": "", "diedOnRound": 0, "team": "team", "quantity": 0, "objects": []}]
 
-    # Add each creature to the display list/dict to get a quantity of each
-    creatureDisplayDict = []    
-    for creature in activeCreatures: 
+        # General Tracking
+        self.winningTeam = -1
+        self.teamWinCount = []
+        self.simulationActive = False
 
-        match = False
-
-        for dict in creatureDisplayDict:
-
-            if dict["name"] == creature.name and \
-                dict["diedOnRound"] == creature.diedOnRound and \
-                dict["team"] == creature.team:
-
-                dict["quantity"] += 1
-                dict["objects"].append(creature)
-                match = True
-
-        if not match:
-            creatureDisplayDict.append({"name": creature.name, \
-                                        "diedOnRound": creature.diedOnRound, \
-                                        "team": creature.team, 
-                                        "quantity": 1, \
-                                        "objects":[creature]})
-
-    # Sort the display list
-    creatureDisplayDict = sorted(creatureDisplayDict, key=operator.itemgetter('diedOnRound','quantity', 'team'))
-
-    # If the team list is empty after all of this, then fix that
-    if not teamList:
-        teamList = [[]]
-
-    # Reset win counts
-    for dict in creatureDisplayDict:
-        while len(teamWinCount) < dict["team"] + 1:
-            teamWinCount.append(0)
-
-
-
-
-
-def removeCreature(creature):
-
-    global teamList, initiativeList
-
-    # Add creature to losers list:
-    losers.append(creature)
-
-    # Initiative List
-    index = initiativeList.index(creature)
-    initiativeList.pop(index)
-
-    # Team list
-    teamIndex = creature.teamIndex
-    innerIndex = teamList[teamIndex].index(creature)
-    teamList[teamIndex].pop(innerIndex)
-
-    # Check to see if that was the last creature on that team:
-    if len(teamList[creature.teamIndex]) == 0:   
-
-        startIndex = int(creature.teamIndex)
-
-        # Fix the team index of remaining creatures
-        for remainingCreature in initiativeList:
-            if remainingCreature.teamIndex > startIndex:
-                remainingCreature.teamIndex -= 1
-
-        # Remove that team from the list 
-        teamList.pop(creature.teamIndex)
-
-
-
-def battle():
-
-    global winningTeam, simulationActive, outputManager, teamWinCount
-    simulationActive = True
-
-    resetCreatures()  
-
-    # Check to make sure there is at least 2 creatures
-    if len(initiativeList) < 1:
-        print("\n!!! WARNING !!! - Could not run battle. There needs to be more than 1 creature in the initiative list.")
-        return
-
-    # Check to make sure there is at least 2 teams
-    if len(teamList) <= 1:
-        print("\n!!! WARNING !!! - Could not run battle. There needs to be more than 1 team.")
-        return
-
-
-    # FIGHT FIGHT FIGHT!    
-    winningTeam = -1
-    for i in range(1, 10000): #Failsafe for if loop never breaks. Hopefully no battle goes on for more than 10000 turns (16 hours in game!)
+        # Misc
         
-        # Check for a winning team
-        if winningTeam >= 0:
-            break
+        self.outputManager = OutputManager.OutputManager()
 
-        # Output for better viewing of logs
-        outputManager.addLine(f"====================================================================================================", 0)
-        outputManager.addLine(f"============================================= Round {i} ==============================================", 0)
-        outputManager.addLine(f"====================================================================================================", 0)
 
-        # Go down the initiative list, giving each creature a turn
-        for creature in initiativeList:
 
+    def createFreshCreature(self, path, team):
+
+        try:
+            
+            # Create the creature
+            newCreature = Creature.Creature().loadFromFile(path)
+            newCreature.team = team
+            newCreature.teamIndex = team
+            newCreature.outputManager = self.outputManager
+
+            return(newCreature)
+
+        except:
+            print("!!! WARNING !!! - Something went wrong with adding those creatures. A default creature was created instead.")
+            return Creature.Creature()
+
+
+
+    def resetCreatures(self):
+
+        # Reset vars
+        self.initiativeList = []
+        self.teamList = [[]]
+        self.losers = []
+        self.winningTeam = -1
+
+        # Create the new creatures
+        for creature in self.freshCreatures:
+            newCreature = copy.copy(creature)               # Copy from the clean copy
+            newCreature.resetTempVars(creature.team)        # Set their health and re-roll initiative
+            self.initiativeList.append(newCreature)         # Add it to the danger zone
+
+        # Sort the initiative
+        self.initiativeList.sort(key=operator.attrgetter("initiativeRoll"))
+        self.initiativeList.reverse()   
+        
+        self.formatTeams()
+
+
+
+    def formatTeams(self):
+
+        self.teamList = [[]]
+
+        # Put all creatures into one list
+        activeCreatures = []
+        for creature in self.initiativeList:
+            activeCreatures.append(creature)
+        for creature in self.losers:
+            activeCreatures.append(creature)
+
+        # For all dead and alive creatures, create a list where they are grouped with their teammates
+        for creature in activeCreatures:
+            
+            creatureAdded = False
+            while creatureAdded == False:
+
+                try:
+                    # Try to add the creature
+                    self.teamList[creature.team].append(creature)    
+                    creatureAdded = True
+
+                except:
+                    # Creature wasn't added successfully, increase the size of TeamList to fix it
+                    self.teamList.append([])   
+
+        # If the last team is empty during a simulation, remove it, but not if there is only 1 team
+        if not self.teamList[len(self.teamList)-1] and not self.teamList and self.simulationActive:
+            self.teamList.pop(len(self.teamList)-1)
+
+        # Add each creature to the display list/dict to get a quantity of each
+        self.creatureDisplayDict = []    
+        for creature in activeCreatures: 
+
+            match = False
+
+            for dict in self.creatureDisplayDict:
+
+                if dict["name"] == creature.name and \
+                    dict["diedOnRound"] == creature.diedOnRound and \
+                    dict["team"] == creature.team:
+
+                    dict["quantity"] += 1
+                    dict["objects"].append(creature)
+                    match = True
+
+            if not match:
+                self.creatureDisplayDict.append({"name": creature.name, \
+                                            "diedOnRound": creature.diedOnRound, \
+                                            "team": creature.team, 
+                                            "quantity": 1, \
+                                            "objects":[creature]})
+
+        # Sort the display list
+        self.creatureDisplayDict = sorted(self.creatureDisplayDict, key=operator.itemgetter('diedOnRound','quantity', 'team'))
+
+        # If the team list is empty after all of this, then fix that
+        if not self.teamList:
+            self.teamList = [[]]
+
+        # Reset win counts
+        for dict in self.creatureDisplayDict:
+            while len(self.teamWinCount) < dict["team"] + 1:
+                self.teamWinCount.append(0)
+
+
+
+    def removeCreature(self, creature):
+
+        # Add creature to losers list:
+        self.losers.append(creature)
+
+        # Initiative List
+        index = self.initiativeList.index(creature)
+        self.initiativeList.pop(index)
+
+        # Team list
+        teamIndex = creature.teamIndex
+        innerIndex = self.teamList[teamIndex].index(creature)
+        self.teamList[teamIndex].pop(innerIndex)
+
+        # Check to see if that was the last creature on that team:
+        if len(self.teamList[creature.teamIndex]) == 0:   
+
+            startIndex = int(creature.teamIndex)
+
+            # Fix the team index of remaining creatures
+            for remainingCreature in self.initiativeList:
+                if remainingCreature.teamIndex > startIndex:
+                    remainingCreature.teamIndex -= 1
+
+            # Remove that team from the list 
+            self.teamList.pop(creature.teamIndex)
+
+
+
+    def battle(self):
+
+        self.simulationActive = True
+
+        self.resetCreatures()  
+
+        # Check to make sure there is at least 2 creatures
+        if len(self.initiativeList) < 1:
+            print("\n!!! WARNING !!! - Could not run battle. There needs to be more than 1 creature in the initiative list.")
+            return
+
+        # Check to make sure there is at least 2 teams
+        if len(self.teamList) <= 1:
+            print("\n!!! WARNING !!! - Could not run battle. There needs to be more than 1 team.")
+            return
+
+
+        # FIGHT FIGHT FIGHT!    
+        self.winningTeam = -1
+        for i in range(1, 10000): #Failsafe for if loop never breaks. Hopefully no battle goes on for more than 10000 turns (16 hours in game!)
+            
             # Check for a winning team
-            if winningTeam >= 0:
+            if self.winningTeam >= 0:
                 break
 
-            # Give the turn
-            outputManager.addLine("\n", 0)
-            effectedCreatures = None
-            effectedCreatures = creature.turn(teamList)  #Creature.turn returns the creatures that was effected during the turn
+            # Output for better viewing of logs
+            self.outputManager.addLine(f"====================================================================================================", 0)
+            self.outputManager.addLine(f"============================================= Round {i} ==============================================", 0)
+            self.outputManager.addLine(f"====================================================================================================", 0)
 
-            # Quick check against garbage
-            if effectedCreatures == None:
-                outputManager.addLine(f"!!! WARNING !!! - No creatures were targeted on this turn.", 2)
-                return
+            # Go down the initiative list, giving each creature a turn
+            for creature in self.initiativeList:
 
-
-            for effectedCreature in effectedCreatures:
-                # Check for a death
-                if effectedCreature.hitPoints > 0:
-                    continue
-
-                # The effected creature died, mark it as dead
-                removeCreature(effectedCreature)
-                effectedCreature.diedOnRound = i
-                outputManager.addLine(f"\t{effectedCreature.name} died!", 0)
-                    
-                # Check to see if the game is finished (1 team remaining)
-                if len(teamList) == 1:
-                    winningTeam = creature.team
+                # Check for a winning team
+                if self.winningTeam >= 0:
                     break
 
-        outputManager.addLine("\n", 0)
+                # Give the turn
+                self.outputManager.addLine("\n", 0)
+                effectedCreatures = None
+                effectedCreatures = creature.turn(self.teamList)  #Creature.turn returns the creatures that was effected during the turn
 
-    # Add to the count of how many times that team X has won
-    # Expand list size if needed
-    for dict in creatureDisplayDict:
-        while len(teamWinCount) < winningTeam + 1:
-            teamWinCount.append(0)
-    teamWinCount[winningTeam] += 1
+                # Quick check against garbage
+                if effectedCreatures == None:
+                    self.outputManager.addLine(f"!!! WARNING !!! - No creatures were targeted on this turn.", 2)
+                    return
+
+
+                for effectedCreature in effectedCreatures:
+                    # Check for a death
+                    if effectedCreature.hitPoints > 0:
+                        continue
+
+                    # The effected creature died, mark it as dead
+                    self.removeCreature(effectedCreature)
+                    effectedCreature.diedOnRound = i
+                    self.outputManager.addLine(f"\t{effectedCreature.name} died!", 0)
+                        
+                    # Check to see if the game is finished (1 team remaining)
+                    if len(self.teamList) == 1:
+                        self.winningTeam = creature.team
+                        break
+
+            self.outputManager.addLine("\n", 0)
+
+        # Add to the count of how many times that team X has won
+        # Expand list size if needed
+        for dict in self.creatureDisplayDict:
+            while len(self.teamWinCount) < self.winningTeam + 1:
+                self.teamWinCount.append(0)
+        self.teamWinCount[self.winningTeam] += 1
 
 
 
-    outputManager.addLine(f"====================================================================================================", 0)
-    outputManager.addLine("\n", 0)
+        self.outputManager.addLine(f"====================================================================================================", 0)
+        self.outputManager.addLine("\n", 0)
 
-    formatTeams()
-    displayTeams(0)
+        self.formatTeams()
+        displayTeams(0)
+        self.simulationActive = False
     
 
-
+DM = DungeonMaster()
 
 
 
@@ -292,94 +297,96 @@ def battle():
 
 def displayTeam(teamindex, mode):
 
-    global creatureDisplayDict, winningTeam, teamList
+    global DM
 
     # Check if it is an empty team, if so, say so
-    for i, team in enumerate(teamList):
+    for i, team in enumerate(DM.teamList):
         if not len(team) and i == teamindex:
-            outputManager.addLine("\t\tEmpty", mode)
+            DM.outputManager.addLine("\t\tEmpty", mode)
             return
 
     # Find the maximum quantity to display (important for displaying 1,000 wolves vs acerak at 129 hp)
     maxQuantity = 0
-    for dict in creatureDisplayDict:
+    for dict in DM.creatureDisplayDict:
         if dict['quantity'] > maxQuantity:
             maxQuantity = dict['quantity']
 
     # Sort the display list
-    creatureDisplayDict = sorted(creatureDisplayDict, key=operator.itemgetter('diedOnRound','quantity', 'team'))
+    DM.creatureDisplayDict = sorted(DM.creatureDisplayDict, key=operator.itemgetter('diedOnRound','quantity', 'team'))
 
     # Display winning team
-    if winningTeam >= 0 and teamindex == winningTeam:
+    if DM.winningTeam >= 0 and teamindex == DM.winningTeam:
 
         # Display Dead Creatures
-        for dict in creatureDisplayDict:
+        for dict in DM.creatureDisplayDict:
             if dict["team"] == teamindex and dict["diedOnRound"] > 0:
-                outputManager.addLine(f"\t\t{dict['name']} x{dict['quantity']} - Died on round {dict['diedOnRound']}", mode)
+                DM.outputManager.addLine(f"\t\t{dict['name']} x{dict['quantity']} - Died on round {dict['diedOnRound']}", mode)
 
         # Display Alive Creatures
-        for dict in creatureDisplayDict:
+        for dict in DM.creatureDisplayDict:
             if dict["team"] == teamindex and dict["diedOnRound"] == 0:
                 dict['objects'].sort(key=operator.attrgetter("hitPoints"))
 
                 if dict['quantity'] > 10:
                     # Display by quantity
-                    outputManager.addLine(f"\t\t{dict['name']} x{dict['quantity']} - Survived!", mode)
+                    DM.outputManager.addLine(f"\t\t{dict['name']} x{dict['quantity']} - Survived!", mode)
                 else:
                     # Display by individual HP
                     for creature in dict['objects']:
-                        outputManager.addLine(f"\t\t{creature.name} - {creature.hitPoints} HP", mode)
+                        DM.outputManager.addLine(f"\t\t{creature.name} - {creature.hitPoints} HP", mode)
                     
     # Displaying all creature for when a battle hasn't happened yet
-    elif winningTeam == -1:
-        for dict in creatureDisplayDict:
+    elif DM.winningTeam == -1:
+        for dict in DM.creatureDisplayDict:
             if dict["team"] == teamindex:
-                outputManager.addLine(f"\t\t{dict['name']} x{dict['quantity']}", mode)
+                DM.outputManager.addLine(f"\t\t{dict['name']} x{dict['quantity']}", mode)
     
     # Display Dead Creatures - Catch all case
     else:        
-        for dict in creatureDisplayDict:
+        for dict in DM.creatureDisplayDict:
             if dict["team"] == teamindex:
-                outputManager.addLine(f"\t\t{dict['name']} x{dict['quantity']} - Died on round {dict['diedOnRound']}", mode)
+                DM.outputManager.addLine(f"\t\t{dict['name']} x{dict['quantity']} - Died on round {dict['diedOnRound']}", mode)
 
 
 
 def displayTeams(mode):
 
-    global teamList, creatureDisplayDict, winningTeam, outputManager
+    global DM
+
     header = "Team"
 
     # Print the winning team if there is one, and set a header for the rest of the output
-    if winningTeam >= 0:
-        outputManager.addLine("Winning team:", mode)
-        displayTeam(winningTeam, mode)
-        outputManager.addLine("Losers: ", mode)
+    if DM.winningTeam >= 0:
+        DM.outputManager.addLine("Winning team:", mode)
+        displayTeam(DM.winningTeam, mode)
+        DM.outputManager.addLine("Losers: ", mode)
         header = "    Team"
 
     # Display teams/loser teams
-    for t in range(0, len(teamList)):
+    for t in range(0, len(DM.teamList)):
 
         # Don't display the winning team, as that was already done
-        if t == winningTeam:
+        if t == DM.winningTeam:
             continue
 
-        outputManager.addLine(f"{header} {t+1}:", mode)
+        DM.outputManager.addLine(f"{header} {t+1}:", mode)
 
         displayTeam(t, mode)
 
 
 
-def menu_addCreatures():
+def menu_addCreatures():    
     
+    global DM
+
     # Setup
-    global fileList, teamList
-    resetCreatures()
-    formatTeams()
+    DM.resetCreatures()
+    DM.formatTeams()
     print("\n")
 
     # Show the list of available monsters
     print ("[0] Exit to main menu\n")
-    for s, i in zip(readablePaths, range(1, len(readablePaths)+1)):
+    for s, i in zip(DM.readablePaths, range(1, len(DM.readablePaths)+1)):
         print(f"[{i}] {s}")
     print ("\n[0] Exit to main menu")
     
@@ -388,7 +395,7 @@ def menu_addCreatures():
     while i != 0:
         try:
             i = int(input("\nCreature to add: "))
-            creaturePath = fileList[i-1]
+            creaturePath = DM.fileList[i-1]
             break
         except:
             print("That is not a valid input.")
@@ -408,29 +415,29 @@ def menu_addCreatures():
 
     # Expand the team list if all teams have at least 1 creature
     teamWithEmpty = False
-    for team in teamList:
+    for team in DM.teamList:
         if not team:
             teamWithEmpty = True
     if not teamWithEmpty:
-        teamList.append([])
+        DM.teamList.append([])
 
     # Format current teams, and increase the team size if needed
     print("\n")
-    formatTeams()
-    if teamList[len(teamList)-1]:
-        teamList.append([])
+    DM.formatTeams()
+    if DM.teamList[len(DM.teamList)-1]:
+        DM.teamList.append([])
 
     # Immediately add the creature(s) if there is only 1 team
-    if len(teamList) == 1:
+    if len(DM.teamList) == 1:
         try:
-            newCreature = createFreshCreature(creaturePath, 0)
+            newCreature = DM.createFreshCreature(creaturePath, 0)
             for i in range(0, quantity):
-                freshCreatures.append(copy.copy(newCreature))
+                DM.freshCreatures.append(copy.copy(newCreature))
 
         except:
             print("!!! WARNING !!! - Something went wrong with adding those creatures.")
         
-        resetCreatures()
+        DM.resetCreatures()
         return
 
     # Show the user what they're doing
@@ -440,7 +447,7 @@ def menu_addCreatures():
     while i != 0:
         try:
             i = int(input(f"\nAdding to team: "))
-            if i > len(teamList):
+            if i > len(DM.teamList):
                 raise Exception()
             team = i-1
             break
@@ -453,39 +460,39 @@ def menu_addCreatures():
 
     # Create the team
     try:
-        newCreature = createFreshCreature(creaturePath, team)
+        newCreature = DM.createFreshCreature(creaturePath, team)
         for i in range(0, quantity):
-            freshCreatures.append(copy.copy(newCreature))
+            DM.freshCreatures.append(copy.copy(newCreature))
 
     except:
         print("!!! WARNING !!! - Something went wrong with adding those creatures.")
     
-    resetCreatures()
+    DM.resetCreatures()
 
 
 
 def menu_clearAll():
 
-    global freshCreatures, initiativeList, teamList, losers
+    global DM
 
-    freshCreatures = []
-    initiativeList = []
-    teamList = [[],[]]
-    losers = []
+    DM.freshCreatures = []
+    DM.initiativeList = []
+    DM.teamList = [[],[]]
+    DM.losers = []
     
 
 
 def menu_runBattle():
     
-    global simulationActive, outputManager, initiativeList, teamList, teamWinCount
+    global DM
 
     # Display teams in the overview log
-    teamWinCount = []
-    formatTeams()
-    resetCreatures()
-    outputManager.verbose = False
+    DM.teamWinCount = []
+    DM.formatTeams()
+    DM.resetCreatures()
+    DM.outputManager.verbose = False
     displayTeams(1)
-    outputManager.verbose = True
+    DM.outputManager.verbose = True
 
     # Find out how many battles to run
     battlesToRun = -1
@@ -495,63 +502,61 @@ def menu_runBattle():
 
         try:
             battlesToRun = int(input("> "))
-            outputManager.numBattles = battlesToRun
+            DM.outputManager.numBattles = battlesToRun
 
             # Warn user of excesive simulation time & turn off verbose
             if battlesToRun > 100:
                 print("\n")
                 input(f"Warning! {battlesToRun} is a lot of battles! You might want to reconsider.\nPress Enter to Continue...")
-                outputManager.verbose = False
+                DM.outputManager.verbose = False
 
-            if len(initiativeList) > 100:
+            if len(DM.initiativeList) > 100:
                 print("\n")
-                input(f"Warning! {len(initiativeList)} is a lot of creatures! You might want to reconsider.\nPress Enter to Continue...")
-                outputManager.verbose = False
+                input(f"Warning! {len(DM.initiativeList)} is a lot of creatures! You might want to reconsider.\nPress Enter to Continue...")
+                DM.outputManager.verbose = False
 
         except:
             print("Invalid input. Enter 0 to exit without starting a battle.")
 
 
     # Win index logging
-    outputManager.winIndexesByTeam = [[]]
-    while len(outputManager.winIndexesByTeam) != len(teamList):
-        outputManager.winIndexesByTeam.append([])
+    DM.outputManager.winIndexesByTeam = [[]]
+    while len(DM.outputManager.winIndexesByTeam) != len(DM.teamList):
+        DM.outputManager.winIndexesByTeam.append([])
         
 
     # Battle for requested ammount
-    simulationActive = True
-    outputManager.startTime = time.time()
+    DM.outputManager.startTime = time.time()
 
-    if not outputManager.verbose:
+    if not DM.outputManager.verbose:
         print("Running...")
 
     for i in range(0, battlesToRun):
 
         print(f"Running Battle {i}")
-        outputManager.currentBattle = i
-        battle()
-        outputManager.winIndexesByTeam[winningTeam].append(i)
+        DM.outputManager.currentBattle = i
+        DM.battle()
+        DM.outputManager.winIndexesByTeam[DM.winningTeam].append(i)
         
-    outputManager.endTime = time.time()
+    DM.outputManager.endTime = time.time()
 
     # Sort/format the aftermath for display    
     print("")
-    formatTeams() 
-    outputManager.verbose = False
-    simulationActive = False
+    DM.formatTeams() 
+    DM.outputManager.verbose = False
 
     # Send the win counts to the output manager
-    outputManager.addLine("", 1)
-    for i, winCount in enumerate(teamWinCount):
+    DM.outputManager.addLine("", 1)
+    for i, winCount in enumerate(DM.teamWinCount):
         footer = ""
         if winCount > 0:
             footer = f" - {((winCount/battlesToRun)*100):.2f} % win rate"
-        outputManager.addLine(f"Team {i+1} - {winCount} wins{footer}", 1)
-    outputManager.addLine("", 1)
+        DM.outputManager.addLine(f"Team {i+1} - {winCount} wins{footer}", 1)
+    DM.outputManager.addLine("", 1)
 
     # Save
-    outputManager.verbose = True
-    outputManager.saveBattles()
+    DM.outputManager.verbose = True
+    DM.outputManager.saveBattles()
 
     print("\n")
     input("Press Enter to Continue...")
@@ -560,8 +565,11 @@ def menu_runBattle():
 
 
 def menu_displayTeams():
+
+    global DM
+
     print("\n")
-    formatTeams()
+    DM.formatTeams()
     displayTeams(-1)
     print("\n")
     input("Press Enter to Continue...")
@@ -571,30 +579,36 @@ def menu_displayTeams():
 
 def menu_addPreset_basic():
 
-    freshCreatures.append(createFreshCreature("creatures/Dire_Bear.json", 0))
-    freshCreatures.append(createFreshCreature("creatures/Earth_Elemental.json", 1))
-    freshCreatures.append(createFreshCreature("creatures/Hill_Giant.json", 2))
+    global DM
+
+    DM.freshCreatures.append(DM.createFreshCreature("creatures/Dire_Bear.json", 0))
+    DM.freshCreatures.append(DM.createFreshCreature("creatures/Earth_Elemental.json", 1))
+    DM.freshCreatures.append(DM.createFreshCreature("creatures/Hill_Giant.json", 2))
     
-    resetCreatures()
+    DM.resetCreatures()
 
 
 
 def menu_addPreset_basic_x10():
 
-    c1 = createFreshCreature("creatures/Dire_Bear.json", 0)
-    c2 = createFreshCreature("creatures/Earth_Elemental.json", 1)
-    c3 = createFreshCreature("creatures/Hill_Giant.json", 2)
+    global DM
+
+    c1 = DM.createFreshCreature("creatures/Dire_Bear.json", 0)
+    c2 = DM.createFreshCreature("creatures/Earth_Elemental.json", 1)
+    c3 = DM.createFreshCreature("creatures/Hill_Giant.json", 2)
 
     for i in range(0, 10):
-        freshCreatures.append(copy.copy(c1))
-        freshCreatures.append(copy.copy(c2))
-        freshCreatures.append(copy.copy(c3))
+        DM.freshCreatures.append(copy.copy(c1))
+        DM.freshCreatures.append(copy.copy(c2))
+        DM.freshCreatures.append(copy.copy(c3))
     
-    resetCreatures()
+    DM.resetCreatures()
 
 
 
 def menu_addPreset_Random():
+
+    global DM
 
     teams = random.randint(2, 10)    # Randomly create up to 10 teams
     for t in range(0, teams):
@@ -602,41 +616,46 @@ def menu_addPreset_Random():
         uniqueCreatures = random.randint(1, 9) # Randomly use up to 9 varieties of creature    
         for i in range(0, uniqueCreatures):
 
-            creatureID = random.randint(0, len(fileList))   # Randomly pick one of the available creatures
-            freshCreatures.append(createFreshCreature(fileList[creatureID-1], t)) #Add it
+            creatureID = random.randint(0, len(DM.fileList))   # Randomly pick one of the available creatures
+            DM.freshCreatures.append(DM.createFreshCreature(DM.fileList[creatureID-1], t)) #Add it
     
-    resetCreatures()
+    DM.resetCreatures()
 
 
 
 def menu_addPreset_KingOfTheHill():
 
-    for i, path in enumerate(fileList):
-        freshCreatures.append(createFreshCreature(path, i))
+    global DM
+
+    for i, path in enumerate(DM.fileList):
+        DM.freshCreatures.append(DM.createFreshCreature(path, i))
     
-    resetCreatures()
+    DM.resetCreatures()
 
 
 
 def menu_addPreset_Commoner():
 
-    c = createFreshCreature("creatures/Commoner.json", 0)
+    global DM
+
+    c = DM.createFreshCreature("creatures/Commoner.json", 0)
 
     for i in range(0, 10000):
-        freshCreatures.append(copy.copy(c))
+        DM.freshCreatures.append(copy.copy(c))
     
-    resetCreatures()
+    DM.resetCreatures()
 
 
 
 def menu_toggleSaveToFile():
-    global outputManager
 
-    if outputManager.canSaveToFile:
-        outputManager.canSaveToFile = False
+    global DM
+
+    if DM.outputManager.canSaveToFile:
+        DM.outputManager.canSaveToFile = False
         print("Saving to file: Disabled")
     else:
-        outputManager.canSaveToFile = True
+        DM.outputManager.canSaveToFile = True
         print("Saving to file: Enabled")
 
     print("\n")
@@ -650,8 +669,6 @@ def menu_toggleSaveToFile():
 
 
 def gui():
-
-    global outputManager
 
     # Create the formatting for the menu
     menu_format = MenuFormatBuilder(max_dimension=Dimension(100,50)) \

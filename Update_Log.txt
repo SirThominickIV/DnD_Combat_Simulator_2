@@ -1,5 +1,12 @@
 ------------------------------------------------------------
-10/17/22 - Created a new module to handle output
+10/28/22 - Refactored main to include a DM class
+------------------------------------------------------------
+Previously a bunch of functions such as resetCreatures(), removeCreature(), battle(), etc were just sitting at the top of Main.py
+Instead of that, those big important functions that run the battle have been moved into a new class, the DungeonMaster(). This will help with cleaning up and organizing functions. At a later date if the DungeonMaster class should need it's own module, it would make it easier to do so. Additionally, it will make it easier to use multithreading in the future if/when support is made for it.
+
+
+------------------------------------------------------------
+10/27/22 - Created a new module to handle output
 ------------------------------------------------------------
 There is now an output manager! It takes output that is given to it, and saves them to logs within the results folder that it creates. There are two main categories of logs. There are individual battle logs, and an overview log. So if you run 100,000 battles, each battle will get it's own log to show what each creature did on it's turn. The overview log will tell you broad statistics about the battles that were run. How many times did the nth team win? What was the percentage? What creatures were on each time? Which rounds did the nth team win? These are all answered and logged in the overview log.
 
